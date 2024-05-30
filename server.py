@@ -1,5 +1,6 @@
 import socket
 import random
+import os
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.backends import default_backend
@@ -16,10 +17,20 @@ def calculate_public_key(private_key):
 def calculate_shared_secret(public_key, private_key):
     return pow(public_key, private_key, p)
 
+def save_key_to_file(key, filename):
+    with open(filename, 'w') as file:
+        file.write(str(key))
+
+def load_key_from_file(filename):
+    if os.path.exists(filename):
+        with open(filename, 'r') as file:
+            return int(file.read())
+    return None
+
 def encrypt_message(message, key):
     padder = padding.PKCS7(algorithms.AES.block_size).padder()
     padded_data = padder.update(message.encode()) + padder.finalize()
-    iv = b'\x00' * 16  # Инициализационный вектор (может быть случайным)
+    iv = b'\x00' * 16
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
     encryptor = cipher.encryptor()
     return iv + encryptor.update(padded_data) + encryptor.finalize()
@@ -39,11 +50,18 @@ server_socket.listen(1)
 
 print("Server is listening on port 65432")
 
+private_key = load_key_from_file('server_private_key.txt')
+if private_key is None:
+    private_key = generate_private_key()
+    save_key_to_file(private_key, 'server_private_key.txt')
+
+public_key = load_key_from_file('server_public_key.txt')
+if public_key is None:
+    public_key = calculate_public_key(private_key)
+    save_key_to_file(public_key, 'server_public_key.txt')
+
 conn, addr = server_socket.accept()
 print(f"Connected by {addr}")
-
-private_key = generate_private_key()
-public_key = calculate_public_key(private_key)
 
 client_public_key = int(conn.recv(1024).decode())
 print(f"Received client public key: {client_public_key}")
